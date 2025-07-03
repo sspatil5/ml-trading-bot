@@ -21,9 +21,9 @@ interval = st.sidebar.selectbox("Interval", ["1d", "1h"], index=0)
 @st.cache_data
 def get_stock_data(ticker, period, interval):
     df = yf.download(ticker, period=period, interval=interval)
-    df['SMA_10'] = ta.sma(df['Close'], length=10)
-    df['RSI'] = ta.rsi(df['Close'], length=14)
-    macd = ta.macd(df['Close'])
+    df['SMA_10'] = df.ta.sma(length=10)
+    df['RSI'] = df.ta.rsi(length=14)
+    macd = df.ta.macd()
     df['MACD'] = macd['MACD_12_26_9']
     df['Lag1'] = df['Close'].shift(1)
     df['Return'] = df['Close'].pct_change()
