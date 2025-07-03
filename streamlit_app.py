@@ -26,8 +26,8 @@ def get_stock_data(ticker, period, interval):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    df['SMA_10'] = df.ta.sma(length=10)
-    df['RSI'] = df.ta.rsi(length=14)
+    df['SMA_10'] = df.ta.sma(length=10).iloc[:, 0]
+    df['RSI'] = df.ta.rsi(length=14).iloc[:, 0]
     macd = df.ta.macd()
     df['MACD'] = macd['MACD_12_26_9']
     df['Lag1'] = df['Close'].shift(1)
