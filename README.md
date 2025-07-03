@@ -17,5 +17,5 @@ This is a Python-based trading bot that uses machine learning to predict stock p
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/ml-trading-bot.git
+git clone https://github.com/sspatil5/ml-trading-bot.git
 cd ml-trading-bot
