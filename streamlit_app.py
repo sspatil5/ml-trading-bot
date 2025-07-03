@@ -21,6 +21,11 @@ interval = st.sidebar.selectbox("Interval", ["1d", "1h"], index=0)
 @st.cache_data
 def get_stock_data(ticker, period, interval):
     df = yf.download(ticker, period=period, interval=interval)
+
+    # Flatten MultiIndex columns if needed (fix for Streamlit Cloud)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
     df['SMA_10'] = df.ta.sma(length=10)
     df['RSI'] = df.ta.rsi(length=14)
     macd = df.ta.macd()
