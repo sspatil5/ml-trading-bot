@@ -20,20 +20,25 @@ interval = st.sidebar.selectbox("Interval", ["1d", "1h"], index=0)
 
 @st.cache_data
 def get_stock_data(ticker, period, interval):
-    df = yf.download(ticker, period=period, interval=interval)
+    df = yf.download(ticker, period=period, interval=interval, auto_adjust=False)
 
-    # Flatten MultiIndex columns if needed (fix for Streamlit Cloud)
+    # Flatten column names if needed
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    df['SMA_10'] = df.ta.sma(length=10).iloc[:, 0]
-    df['RSI'] = df.ta.rsi(length=14).iloc[:, 0]
-    macd = df.ta.macd()
+    # Ensure Close column exists and is clean
+    df = df.dropna(subset=["Close"])
+    
+    # Use explicit column reference to avoid ambiguity
+    df['SMA_10'] = df.ta.sma(close=df['Close'], length=10)
+    df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
+    macd = df.ta.macd(close=df['Close'])
     df['MACD'] = macd['MACD_12_26_9']
-    df['Lag1'] = df['Close'].shift(1)
+    
     df['Return'] = df['Close'].pct_change()
-    df.dropna(inplace=True)
+    df['Lag1'] = df['Return'].shift(1)
     df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
+
     return df
 
 df = get_stock_data(ticker, period, interval)
