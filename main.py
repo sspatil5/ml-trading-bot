@@ -14,9 +14,9 @@ def get_stock_data(ticker='AAPL', period='1y', interval='1d'):
 df = get_stock_data('AAPL')
 print(df.tail())
 
-df['SMA_10'] = ta.sma(df['Close'], length=10) #Adds 10-day simple moving average of closing price
-df['RSI'] = ta.rsi(df['Close'], length=14) #Relative Strength Index, measures momentum, detecting overbought/oversold conditions
-macd = ta.macd(df['Close'])
+df['SMA_10'] = df.ta.sma(length=10) #Adds 10-day simple moving average of closing price
+df['RSI'] = df.ta.rsi(length=14) #Relative Strength Index, measures momentum, detecting overbought/oversold conditions
+macd = df.ta.macd()
 df['MACD'] = macd['MACD_12_26_9'] # Another momentum-based signal
 df['Lag1'] = df['Close'].shift(1) # Basic time dependency: Adds yesterday's closing price as lagged feature
 df['Return'] = df['Close'].pct_change() # Adds daily return in percent change
