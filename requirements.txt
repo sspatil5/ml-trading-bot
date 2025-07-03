@@ -4,3 +4,4 @@ pandas-ta
 matplotlib
 scikit-learn
 streamlit
+setuptools
