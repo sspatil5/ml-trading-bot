@@ -48,7 +48,7 @@ model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
 
 y_pred = model.predict(X_test)
-df = df.iloc[X_test.index]
+df = df.loc[X_test.index]
 df['Predicted'] = y_pred
 df['Strategy'] = df['Predicted'].shift(1) * df['Return']
 
