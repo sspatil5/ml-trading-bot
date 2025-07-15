@@ -37,7 +37,8 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_si
 model = RandomForestClassifier(n_estimators=100, random_state=42) # Creates random forest with 100 decision trees
 model.fit(X_train, y_train) # Fits into training data (Learns patterns)
 
-y_pred = model.predict(X_test) # Attempts to predict test data
+proba = model.predict_proba(X_test)[:, 1]
+y_pred = (proba > 0.55).astype(int) # Attempts to predict test data with confidence threshold
 print(classification_report(y_test, y_pred)) # Prints metrics like Accuracy, Precision, Recall
 
 df = df.iloc[X_test.index] # Keeps only data in the test set (Strategy Simulation)
@@ -45,6 +46,31 @@ df['Predicted'] = y_pred
 df['Strategy'] = df['Predicted'].shift(1) * df['Return']
 # If model predicted 1 yesterday, buy today
 # If model predicted 0 yesterday, don't buy, return 0
+
+# Strategy logic with transaction cost
+cost = 0.001  # 0.1% per trade
+df['Trade'] = df['Predicted'].shift(1).fillna(0)
+df['Strategy'] = df['Trade'] * df['Return'] - cost * df['Trade'].diff().abs().fillna(0)
+
+# Performance metrics
+def compute_metrics(returns, label="Strategy"):
+    cumulative = (1 + returns).prod() - 1
+    ann_return = (1 + cumulative) ** (252 / len(returns)) - 1
+    ann_vol = returns.std() * (252 ** 0.5)
+    sharpe = ann_return / ann_vol if ann_vol != 0 else 0
+    drawdown = (1 + returns).cumprod()
+    max_dd = ((drawdown.cummax() - drawdown) / drawdown.cummax()).max()
+    
+    print(f"\n--- {label} ---")
+    print(f"Cumulative Return: {cumulative:.2%}")
+    print(f"Annualized Return: {ann_return:.2%}")
+    print(f"Volatility: {ann_vol:.2%}")
+    print(f"Sharpe Ratio: {sharpe:.2f}")
+    print(f"Max Drawdown: {max_dd:.2%}")
+
+# Print metrics
+compute_metrics(df['Return'], label="Buy & Hold")
+compute_metrics(df['Strategy'], label="ML Strategy")
 
 # Cumulative returns
 cumulative_returns = (df[['Return', 'Strategy']] + 1).cumprod()
