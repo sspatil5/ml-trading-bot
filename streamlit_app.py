@@ -6,6 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import streamlit as st
+from stock_screener import screen_stocks, format_results
 
 st.set_page_config(page_title="ML Trading Bot", layout="wide")
 
@@ -137,18 +138,7 @@ if st.button("🚀 Run Screener on Top 50 Stocks"):
         if not results:
             st.warning("No outperforming stocks found.")
         else:
-            df_results = pd.DataFrame([
-                {
-                    "Ticker": ticker,
-                    "ML Sharpe": ml["sharpe"],
-                    "BH Sharpe": bh["sharpe"],
-                    "Sharpe Diff": ml["sharpe"] - bh["sharpe"],
-                    "ML Return": ml["annualized"],
-                    "BH Return": bh["annualized"]
-                }
-                for ticker, ml, bh in results
-            ])
-            df_results = df_results.sort_values(by="Sharpe Diff", ascending=False)
+            df_results = format_results(results)
 
             st.success(f"Found {len(df_results)} outperforming stocks.")
             st.dataframe(df_results.style.format({

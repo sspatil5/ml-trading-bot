@@ -1,0 +1,44 @@
+import yfinance as yf
+from strategy import run_ml_strategy, run_buy_and_hold
+import pandas as pd
+
+def screen_stocks(stock_list, start_date, end_date, threshold=0.2, verbose=False):
+    results = []
+
+    for ticker in stock_list:
+        try:
+            if verbose:
+                print(f"Processing {ticker}...")
+
+            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            if df.empty or 'Close' not in df.columns:
+                continue
+
+            ml_perf = run_ml_strategy(df)
+            bh_perf = run_buy_and_hold(df)
+
+            if ml_perf["sharpe"] > bh_perf["sharpe"] + threshold:
+                results.append((ticker, ml_perf, bh_perf))
+
+        except Exception as e:
+            if verbose:
+                print(f"Error processing {ticker}: {e}")
+            continue
+
+    return results
+
+def format_results(results):
+    formatted = pd.DataFrame([
+        {
+            "Ticker": ticker,
+            "ML Sharpe": ml["sharpe"],
+            "BH Sharpe": bh["sharpe"],
+            "Sharpe Diff": ml["sharpe"] - bh["sharpe"],
+            "ML Return": ml["annualized"],
+            "BH Return": bh["annualized"],
+            "ML Max Drawdown": ml["max_drawdown"],
+            "BH Max Drawdown": bh["max_drawdown"],
+        }
+        for ticker, ml, bh in results
+    ])
+    return formatted.sort_values(by="Sharpe Diff", ascending=False).reset_index(drop=True)
