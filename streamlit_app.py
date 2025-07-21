@@ -107,3 +107,54 @@ with st.expander("🔎 Full Metrics Comparison"):
 latest_prediction = "UP 📈" if y_pred[-1] == 1 else "DOWN 📉"
 st.subheader("🔮 Latest Prediction")
 st.markdown(f"Tomorrow's prediction for **{ticker}**: **{latest_prediction}**")
+
+# === Screener Section ===
+st.header("🧠 Stock Screener: Find Top ML-Performing Stocks")
+
+from datetime import date, timedelta
+from stock_screener import screen_stocks
+
+st.markdown("Scan a set of top stocks to find where the ML strategy outperforms Buy & Hold.")
+
+# Preloaded top ~50 US tickers
+preloaded_tickers = [
+    'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK-B', 'JPM',
+    'JNJ', 'UNH', 'V', 'PG', 'MA', 'HD', 'DIS', 'BAC', 'PFE', 'KO',
+    'PEP', 'MRK', 'ABBV', 'XOM', 'WMT', 'CVX', 'AVGO', 'NFLX', 'ADBE', 'T',
+    'INTC', 'CSCO', 'CRM', 'VZ', 'CMCSA', 'ACN', 'ABT', 'NKE', 'MCD', 'TMO',
+    'COST', 'QCOM', 'TXN', 'NEE', 'AMD', 'LOW', 'AMGN', 'DHR', 'MDT', 'LMT'
+]
+
+# Screener time frame and threshold
+screener_start = date.today() - timedelta(days=180)
+screener_end = date.today()
+sharpe_threshold = 0.2
+
+if st.button("🚀 Run Screener on Top 50 Stocks"):
+    with st.spinner("Running strategy..."):
+        results = screen_stocks(preloaded_tickers, screener_start, screener_end, sharpe_threshold)
+
+        if not results:
+            st.warning("No outperforming stocks found.")
+        else:
+            df_results = pd.DataFrame([
+                {
+                    "Ticker": ticker,
+                    "ML Sharpe": ml["sharpe"],
+                    "BH Sharpe": bh["sharpe"],
+                    "Sharpe Diff": ml["sharpe"] - bh["sharpe"],
+                    "ML Return": ml["annualized"],
+                    "BH Return": bh["annualized"]
+                }
+                for ticker, ml, bh in results
+            ])
+            df_results = df_results.sort_values(by="Sharpe Diff", ascending=False)
+
+            st.success(f"Found {len(df_results)} outperforming stocks.")
+            st.dataframe(df_results.style.format({
+                "ML Sharpe": "{:.2f}",
+                "BH Sharpe": "{:.2f}",
+                "Sharpe Diff": "{:.2f}",
+                "ML Return": "{:.2%}",
+                "BH Return": "{:.2%}",
+            }))
