@@ -20,7 +20,7 @@ def compute_metrics(returns):
         "max_drawdown": max_dd
     }
 
-def run_buy_and_hold(df):
+def run_buy_and_hold(df, test_index=None):
     df = df.copy()
     df['Return'] = df['Close'].pct_change()
     df.dropna(inplace=True)
