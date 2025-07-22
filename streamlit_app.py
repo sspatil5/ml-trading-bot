@@ -13,6 +13,47 @@ st.set_page_config(page_title="ML Trading Bot", layout="wide")
 # === Tab selector ===
 mode = st.sidebar.radio("Select Mode", ["📅 Daily ML Bot", "⚡ Intraday Trader (Alpaca)"])
 
+base_model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+@st.cache_data
+def get_stock_data(ticker, period, interval):
+    df = yf.download(ticker, period=period, interval=interval, auto_adjust=False)
+
+    # Flatten column names if needed
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    # Ensure Close column exists and is clean
+    df = df.dropna(subset=["Close"])
+    
+    # Use explicit column reference to avoid ambiguity
+    df['SMA_10'] = df.ta.sma(close=df['Close'], length=10).squeeze()
+    df['RSI'] = df.ta.rsi(close=df['Close'], length=14).squeeze()
+    macd = df.ta.macd(close=df['Close'])
+    df['MACD'] = macd['MACD_12_26_9'].squeeze()
+    
+    df['Return'] = df['Close'].pct_change()
+    df['Lag1'] = df['Return'].shift(1)
+    df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
+
+    return df
+
+# === Strategy performance metrics ===
+def compute_metrics(returns):
+    cumulative = (1 + returns).prod() - 1
+    annualized = (1 + cumulative) ** (252 / len(returns)) - 1
+    vol = returns.std() * (252 ** 0.5)
+    sharpe = annualized / vol if vol != 0 else 0
+    dd = (1 + returns).cumprod()
+    max_dd = ((dd.cummax() - dd) / dd.cummax()).max()
+    return {
+        "Cumulative Return": cumulative,
+        "Annualized Return": annualized,
+        "Volatility": vol,
+        "Sharpe Ratio": sharpe,
+        "Max Drawdown": max_dd
+    }
+
 def run_daily_strategy():
     # === Title ===
     st.title("📈 Machine Learning Trading Bot")
@@ -23,29 +64,6 @@ def run_daily_strategy():
     period = st.sidebar.selectbox("Period", ["6mo", "1y", "2y"], index=1)
     interval = st.sidebar.selectbox("Interval", ["1d", "1h"], index=0)
 
-    @st.cache_data
-    def get_stock_data(ticker, period, interval):
-        df = yf.download(ticker, period=period, interval=interval, auto_adjust=False)
-
-        # Flatten column names if needed
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        # Ensure Close column exists and is clean
-        df = df.dropna(subset=["Close"])
-    
-        # Use explicit column reference to avoid ambiguity
-        df['SMA_10'] = df.ta.sma(close=df['Close'], length=10)
-        df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
-        macd = df.ta.macd(close=df['Close'])
-        df['MACD'] = macd['MACD_12_26_9']
-    
-        df['Return'] = df['Close'].pct_change()
-        df['Lag1'] = df['Return'].shift(1)
-        df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
-
-        return df
-
     df = get_stock_data(ticker, period, interval)
 
     # === Train model ===
@@ -54,7 +72,7 @@ def run_daily_strategy():
     y = df['Target']
     X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model = base_model
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -73,22 +91,6 @@ def run_daily_strategy():
     st.subheader("📋 Model Classification Metrics")
     report = classification_report(y_test, y_pred, output_dict=True)
     st.json(report)
-
-    # === Strategy performance metrics ===
-    def compute_metrics(returns):
-        cumulative = (1 + returns).prod() - 1
-        annualized = (1 + cumulative) ** (252 / len(returns)) - 1
-        vol = returns.std() * (252 ** 0.5)
-        sharpe = annualized / vol if vol != 0 else 0
-        dd = (1 + returns).cumprod()
-        max_dd = ((dd.cummax() - dd) / dd.cummax()).max()
-        return {
-            "Cumulative Return": cumulative,
-            "Annualized Return": annualized,
-            "Volatility": vol,
-            "Sharpe Ratio": sharpe,
-            "Max Drawdown": max_dd
-        }
 
     strategy_metrics = compute_metrics(df['Strategy'].dropna())
     buy_hold_metrics = compute_metrics(df['Return'].dropna())
