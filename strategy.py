@@ -40,7 +40,7 @@ def run_ml_strategy(df, return_full_df=False):
     df['RSI'] = ta.rsi(df['Close'], length=14).shift(1)
     macd = ta.macd(df['Close'])
     df['MACD'] = macd['MACD_12_26_9'].shift(1)
-    df['Lag1'] = df['Close'].shift(2)  # Lag1 of Close, shifted an extra step to match features at t-1
+    df['Lag1'] = df['Close'].shift(1)  # Lag1 of Close, shifted an extra step to match features at t-1
     df['Return'] = df['Close'].pct_change()
 
     # Define target
@@ -67,6 +67,7 @@ def run_ml_strategy(df, return_full_df=False):
     df_test['Trade'] = df_test['Predicted'].shift(1).fillna(0)
     df_test['Strategy'] = df_test['Trade'] * df_test['Return'] - 0.001 * df_test['Trade'].diff().abs().fillna(0)
 
+    df_test.dropna(subset=['Strategy'], inplace=True)
     metrics = compute_metrics(df_test['Strategy'].dropna())
 
     return (metrics, df_test) if return_full_df else metrics
