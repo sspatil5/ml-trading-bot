@@ -7,33 +7,34 @@ def screen_stocks(stock_list, start_date, end_date, verbose=False):
     results = []
 
     for ticker in stock_list:
-    try:
-        if verbose:
-            st.write(f"▶️ Processing {ticker}")
-        data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
-        if data.empty:
+        try:
             if verbose:
-                st.write(f"  ❌ No data for {ticker}")
+                st.write(f"▶️ Processing {ticker}")
+
+            data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
+            if data.empty:
+                if verbose:
+                    st.write(f"  ❌ No data for {ticker}")
+                continue
+
+            ml_perf = run_ml_strategy(data)
+            bh_perf = run_buy_and_hold(data)
+
+            sharpe_diff = ml_perf["sharpe"] - bh_perf["sharpe"]
+            annualized_diff = ml_perf["annualized"] - bh_perf["annualized"]
+
+            if sharpe_diff > 0.5 and annualized_diff > 0.01:
+                results.append((ticker, ml_perf, bh_perf))
+                if verbose:
+                    st.write(f"  ✅ {ticker} — Sharpe Diff: {sharpe_diff:.2f}, Return Diff: {annualized_diff:.2%}")
+            else:
+                if verbose:
+                    st.write(f"  ⚠️ {ticker} skipped — Sharpe Diff: {sharpe_diff:.2f}, Return Diff: {annualized_diff:.2%}")
+
+        except Exception as e:
+            if verbose:
+                st.write(f"  ❌ Error on {ticker}: {e}")
             continue
-
-        ml_perf = run_ml_strategy(data)
-        bh_perf = run_buy_and_hold(data)
-
-        sharpe_diff = ml_perf["sharpe"] - bh_perf["sharpe"]
-        annualized_diff = ml_perf["annualized"] - bh_perf["annualized"]
-
-        if sharpe_diff > 0.5 and annualized_diff > 0.01:
-            results.append((ticker, ml_perf, bh_perf))
-            if verbose:
-                st.write(f"  ✅ {ticker} — Sharpe Diff: {sharpe_diff:.2f}, Return Diff: {annualized_diff:.2%}")
-        else:
-            if verbose:
-                st.write(f"  ⚠️ {ticker} skipped — Sharpe Diff: {sharpe_diff:.2f}, Return Diff: {annualized_diff:.2%}")
-
-    except Exception as e:
-        if verbose:
-            st.write(f"  ❌ Error on {ticker}: {e}")
-        continue
 
     return results
 
