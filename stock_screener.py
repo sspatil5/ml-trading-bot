@@ -32,7 +32,7 @@ def screen_stocks(stock_list, start_date, end_date, verbose=False):
                 st.write(f"  • BH Annualized Return: {bh_perf['annualized']:.2%}")
                 st.write(f"  • Return Diff: {annualized_diff:.2%}")
 
-            if ml_perf["sharpe"] > 1.0 and ml_perf["annualized"] > bh_perf["annualized"]:
+            if ml_perf["sharpe"] > bh_perf["sharpe"] and ml_perf["annualized"] > bh_perf["annualized"]:
                 results.append((ticker, ml_perf, bh_perf))
                 if verbose:
                     st.write(f"  ✅ {ticker} — Sharpe Diff: {sharpe_diff:.2f}, Return Diff: {annualized_diff:.2%}")
