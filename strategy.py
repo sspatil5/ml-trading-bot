@@ -32,28 +32,45 @@ def run_ml_strategy(df, return_full_df=False):
 
     df.dropna(subset=["Close"], inplace=True)
 
+    # Feature engineering
     df['SMA_10'] = df.ta.sma(close=df['Close'], length=10)
     df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
     macd = df.ta.macd(close=df['Close'])
     df['MACD'] = macd['MACD_12_26_9']
     df['Lag1'] = df['Close'].shift(1)
     df['Return'] = df['Close'].pct_change()
-    df.dropna(inplace=True)
+
+    # Shift features forward by 1 so they only use info available at time t
+    df['SMA_10'] = df['SMA_10'].shift(1)
+    df['RSI'] = df['RSI'].shift(1)
+    df['MACD'] = df['MACD'].shift(1)
+    df['Lag1'] = df['Lag1'].shift(1)
+
+    # Define target: whether next-day return is positive
     df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
 
+    df.dropna(inplace=True)
+
+    # Feature and target selection
     features = ['SMA_10', 'RSI', 'MACD', 'Lag1']
     X = df[features]
     y = df['Target']
+
+    # Split without shuffling to preserve time order
     X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
 
+    # Train model
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
+
+    # Predict
     proba = model.predict_proba(X_test)[:, 1]
     y_pred = (proba > 0.55).astype(int)
 
+    # Apply trading logic
     df = df.loc[X_test.index].copy()
     df['Predicted'] = y_pred
-    df['Trade'] = df['Predicted'].shift(1).fillna(0)
+    df['Trade'] = df['Predicted'].shift(1).fillna(0)  # Use signal from previous day
     cost = 0.001
     df['Strategy'] = df['Trade'] * df['Return'] - cost * df['Trade'].diff().abs().fillna(0)
 
