@@ -1,6 +1,7 @@
 import yfinance as yf
 from strategy import run_ml_strategy, run_buy_and_hold
 import pandas as pd
+import streamlit as st
 
 def screen_stocks(stock_list, start_date, end_date, verbose=False):
     results = []
@@ -8,21 +9,24 @@ def screen_stocks(stock_list, start_date, end_date, verbose=False):
     for ticker in stock_list:
         try:
             if verbose:
-                print(f"▶️ Processing {ticker}")
-            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                st.write(f"▶️ Processing {ticker}")
+            data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
             if data.empty:
-                print(f"  ❌ No data for {ticker}")
+                if verbose:
+                    st.write(f"  ❌ No data for {ticker}")
                 continue
 
             ml_perf = run_ml_strategy(data)
             bh_perf = run_buy_and_hold(data)
 
-            print(f"  ✅ ML Sharpe: {ml_perf['sharpe']:.2f}, BH Sharpe: {bh_perf['sharpe']:.2f}")
+            if verbose:
+                st.write(f"  ✅ {ticker} — ML Sharpe: {ml_perf['sharpe']:.2f}, BH Sharpe: {bh_perf['sharpe']:.2f}")
 
             results.append((ticker, ml_perf, bh_perf))
 
         except Exception as e:
-            print(f"  ❌ Error on {ticker}: {e}")
+            if verbose:
+                st.write(f"  ❌ Error on {ticker}: {e}")
             continue
 
     return results
