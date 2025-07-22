@@ -8,21 +8,21 @@ def screen_stocks(stock_list, start_date, end_date, verbose=False):
     for ticker in stock_list:
         try:
             if verbose:
-                print(f"Processing {ticker}...")
-
-            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-            if df.empty or 'Close' not in df.columns:
+                print(f"▶️ Processing {ticker}")
+            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            if data.empty:
+                print(f"  ❌ No data for {ticker}")
                 continue
 
-            ml_perf = run_ml_strategy(df)
-            bh_perf = run_buy_and_hold(df)
+            ml_perf = run_ml_strategy(data)
+            bh_perf = run_buy_and_hold(data)
 
-            if ml_perf["sharpe"] > bh_perf["sharpe"]:
-                results.append((ticker, ml_perf, bh_perf))
+            print(f"  ✅ ML Sharpe: {ml_perf['sharpe']:.2f}, BH Sharpe: {bh_perf['sharpe']:.2f}")
+
+            results.append((ticker, ml_perf, bh_perf))
 
         except Exception as e:
-            if verbose:
-                print(f"Error processing {ticker}: {e}")
+            print(f"  ❌ Error on {ticker}: {e}")
             continue
 
     return results
