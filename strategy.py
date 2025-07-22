@@ -12,11 +12,11 @@ def compute_metrics(returns):
     drawdown = (1 + returns).cumprod()
     max_dd = ((drawdown.cummax() - drawdown) / drawdown.cummax()).max()
     return {
-        "Cumulative Return": cumulative,
-        "Annualized Return": ann_return,
-        "Volatility": ann_vol,
-        "Sharpe Ratio": sharpe,
-        "Max Drawdown": max_dd
+        "cumulative": cumulative,
+        "annualized": ann_return,
+        "volatility": ann_vol,
+        "sharpe": sharpe,
+        "max_drawdown": max_dd
     }
 
 def run_buy_and_hold(df):
