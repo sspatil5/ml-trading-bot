@@ -3,7 +3,7 @@ from strategy import run_ml_strategy, run_buy_and_hold
 import pandas as pd
 import streamlit as st
 
-def screen_stocks(stock_list, start_date, end_date, verbose=False):
+def screen_stocks(stock_list, period, interval, verbose=False):
     results = []
 
     for ticker in stock_list:
@@ -11,7 +11,7 @@ def screen_stocks(stock_list, start_date, end_date, verbose=False):
             if verbose:
                 st.write(f"▶️ Processing {ticker}")
 
-            data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
+            data = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
             if data.empty:
                 if verbose:
                     st.write(f"  ❌ No data for {ticker}")

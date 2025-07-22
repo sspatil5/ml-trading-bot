@@ -144,7 +144,7 @@ preloaded_tickers = [
 
 if st.button("🚀 Run Screener on Top 50 Stocks"):
     with st.spinner("Running strategy..."):
-        results = screen_stocks(preloaded_tickers, start_date, end_date, verbose=True)
+        results = screen_stocks(preloaded_tickers, period=period, interval=interval, verbose=True)
 
         if not results:
             st.warning("No outperforming stocks found.")
