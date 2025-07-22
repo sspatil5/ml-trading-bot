@@ -7,6 +7,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import streamlit as st
 from stock_screener import screen_stocks, format_results
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 st.set_page_config(page_title="ML Trading Bot", layout="wide")
 
@@ -18,6 +20,20 @@ st.markdown("Predict next-day stock movement using a Random Forest classifier an
 ticker = st.sidebar.text_input("Enter Stock Ticker", value="AAPL")
 period = st.sidebar.selectbox("Period", ["6mo", "1y", "2y"], index=1)
 interval = st.sidebar.selectbox("Interval", ["1d", "1h"], index=0)
+
+# === Date Handling ===
+today = datetime.today()
+if period == "6mo":
+    start_date = today - relativedelta(months=6)
+elif period == "1y":
+    start_date = today - relativedelta(years=1)
+elif period == "2y":
+    start_date = today - relativedelta(years=2)
+else:
+    start_date = today - relativedelta(months=6)
+end_date = today
+
+st.markdown(f"📅 Date Range: **{start_date.date()} → {end_date.date()}**")
 
 @st.cache_data
 def get_stock_data(ticker, period, interval):
@@ -126,14 +142,9 @@ preloaded_tickers = [
     'COST', 'QCOM', 'TXN', 'NEE', 'AMD', 'LOW', 'AMGN', 'DHR', 'MDT', 'LMT'
 ]
 
-# Screener time frame and threshold
-screener_start = date.today() - timedelta(days=180)
-screener_end = date.today()
-sharpe_threshold = 0.2
-
 if st.button("🚀 Run Screener on Top 50 Stocks"):
     with st.spinner("Running strategy..."):
-        results = screen_stocks(preloaded_tickers, screener_start, screener_end, verbose=True)
+        results = screen_stocks(preloaded_tickers, start_date, end_date, verbose=True)
 
         if not results:
             st.warning("No outperforming stocks found.")
