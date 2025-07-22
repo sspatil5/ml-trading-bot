@@ -36,8 +36,10 @@ def run_intraday_trader():
         "timeframe": timeframe,
         "start": start_time.isoformat() + "Z",
         "end": end_time.isoformat() + "Z",
-        "limit": limit
-    }
+        "limit": limit,
+        "feed": "iex"
+}
+
 
     response = requests.get(url, headers=headers, params=params)
 
