@@ -143,6 +143,8 @@ if st.button("🚀 Run Screener on Top 50 Stocks"):
                 ml_metrics = compute_metrics(df_temp['Strategy'].dropna())
                 bh_metrics = compute_metrics(df_temp['Return'].dropna())
 
+                prediction_label = "📈 UP" if y_pred[-1] == 1 else "📉 DOWN"
+
                 if ml_metrics['Sharpe Ratio'] > bh_metrics['Sharpe Ratio'] and ml_metrics['Annualized Return'] > bh_metrics['Annualized Return']:
                     outperforming.append({
                         "Ticker": symbol,
