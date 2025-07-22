@@ -1,45 +1,71 @@
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
-import streamlit as st
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
+import streamlit as st
+from datetime import date, timedelta
+from stock_screener import screen_stocks, format_results
 
-# ========== Page Config ==========
 st.set_page_config(page_title="ML Trading Bot", layout="wide")
 
-# ========== Sidebar ==========
-st.sidebar.title("Input Settings")
+# === Title ===
+st.title("📈 Machine Learning Trading Bot")
+st.markdown("Predict next-day stock movement using a Random Forest classifier and technical indicators.")
+
+# === Sidebar Input ===
 ticker = st.sidebar.text_input("Enter Stock Ticker", value="AAPL")
 period = st.sidebar.selectbox("Period", ["6mo", "1y", "2y"], index=1)
 interval = st.sidebar.selectbox("Interval", ["1d", "1h"], index=0)
 
-# ========== Date Calculation ==========
-today = datetime.today()
-if period == "6mo":
-    start_date = today - relativedelta(months=6)
-elif period == "1y":
-    start_date = today - relativedelta(years=1)
-elif period == "2y":
-    start_date = today - relativedelta(years=2)
-end_date = today
-
-# ========== Get Data ==========
-@st.cache_data(ttl=3600)
-def get_data(ticker, start, end, interval):
-    df = yf.download(ticker, start=start, end=end, interval=interval)
+# === Data Retrieval ===
+@st.cache_data
+def get_stock_data(ticker, period, interval):
+    df = yf.download(ticker, period=period, interval=interval, auto_adjust=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
     df = df.dropna(subset=["Close"])
-    df["SMA_10"] = ta.sma(df["Close"], length=10).shift(1)
-    df["RSI"] = ta.rsi(df["Close"], length=14).shift(1)
-    macd = ta.macd(df["Close"])
-    df["MACD"] = macd["MACD_12_26_9"].shift(1)
-    df["Return"] = df["Close"].pct_change()
-    df["Lag1"] = df["Return"].shift(1)
-    df["Target"] = (df["Return"].shift(-1) > 0).astype(int)
+
+    df['SMA_10'] = df.ta.sma(close=df['Close'], length=10)
+    df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
+    macd = df.ta.macd(close=df['Close'])
+    df['MACD'] = macd['MACD_12_26_9']
+
+    df['Return'] = df['Close'].pct_change()
+    df['Lag1'] = df['Return'].shift(1)
+    df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
+
     return df.dropna()
 
+df = get_stock_data(ticker, period, interval)
+
+# === Train model ===
+features = ['SMA_10', 'RSI', 'MACD', 'Lag1']
+X = df[features]
+y = df['Target']
+X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
+
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+df = df.loc[X_test.index]
+df['Predicted'] = y_pred
+df['Trade'] = df['Predicted'].shift(1).fillna(0)
+df['Strategy'] = df['Trade'] * df['Return'] - 0.001 * df['Trade'].diff().abs().fillna(0)
+
+# === Performance chart ===
+cumulative_returns = (df[['Return', 'Strategy']] + 1).cumprod()
+st.subheader("📊 Strategy Performance vs Buy & Hold")
+st.line_chart(cumulative_returns)
+
+# === Metrics ===
+st.subheader("📋 Model Classification Metrics")
+st.json(classification_report(y_test, y_pred, output_dict=True))
+
+# === Strategy performance metrics ===
 def compute_metrics(returns):
     cumulative = (1 + returns).prod() - 1
     annualized = (1 + cumulative) ** (252 / len(returns)) - 1
@@ -55,106 +81,56 @@ def compute_metrics(returns):
         "Max Drawdown": max_dd
     }
 
-# ========== Main Run ==========
-df = get_data(ticker, start_date, end_date, interval)
+strategy_metrics = compute_metrics(df['Strategy'].dropna())
+buy_hold_metrics = compute_metrics(df['Return'].dropna())
 
-features = ["SMA_10", "RSI", "MACD", "Lag1"]
-X = df[features]
-y = df["Target"]
-split = int(len(X) * 0.8)
-X_train, X_test = X[:split], X[split:]
-y_train, y_test = y[:split], y[split:]
-
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
-
-df = df.loc[X_test.index].copy()
-df["Predicted"] = y_pred
-df["Trade"] = df["Predicted"].shift(1).fillna(0)
-df["Strategy"] = df["Trade"] * df["Return"] - 0.001 * df["Trade"].diff().abs().fillna(0)
-
-# ========== Charts ==========
-st.title(f"📈 Results for {ticker}")
-st.line_chart((df[["Return", "Strategy"]] + 1).cumprod())
-
-# ========== Classification Report ==========
-st.subheader("📋 Classification Report")
-st.json(classification_report(y_test, y_pred, output_dict=True))
-
-# ========== Metrics ==========
-ml_metrics = compute_metrics(df["Strategy"].dropna())
-bh_metrics = compute_metrics(df["Return"].dropna())
-
-st.subheader("📊 Performance Comparison")
+st.subheader("📈 Performance Metrics")
 col1, col2, col3 = st.columns(3)
-col1.metric("Sharpe Ratio", f"{ml_metrics['Sharpe Ratio']:.2f}")
-col2.metric("Max Drawdown", f"{ml_metrics['Max Drawdown']:.2%}")
-col3.metric("Annualized Return", f"{ml_metrics['Annualized Return']:.2%}")
+col1.metric("Sharpe Ratio", f"{strategy_metrics['Sharpe Ratio']:.2f}")
+col2.metric("Max Drawdown", f"{strategy_metrics['Max Drawdown']:.2%}")
+col3.metric("Annualized Return", f"{strategy_metrics['Annualized Return']:.2%}")
 
-with st.expander("🔎 Full Metrics"):
-    st.write("**ML Strategy:**")
-    for k, v in ml_metrics.items():
+with st.expander("🔎 Full Metrics Comparison"):
+    st.write("**ML Strategy**")
+    for k, v in strategy_metrics.items():
         st.write(f"{k}: {v:.2%}" if 'Return' in k or 'Drawdown' in k else f"{k}: {v:.2f}")
-    st.write("**Buy & Hold:**")
-    for k, v in bh_metrics.items():
+    st.write("**Buy & Hold**")
+    for k, v in buy_hold_metrics.items():
         st.write(f"{k}: {v:.2%}" if 'Return' in k or 'Drawdown' in k else f"{k}: {v:.2f}")
 
-# ========== Screener ==========
-st.header("🧠 Screener: Top Stocks Where ML Beats Buy & Hold")
+# === Latest Prediction ===
+latest_prediction = "UP 📈" if y_pred[-1] == 1 else "DOWN 📉"
+st.subheader("🔮 Latest Prediction")
+st.markdown(f"Tomorrow's prediction for **{ticker}**: **{latest_prediction}**")
 
-tickers = [  # preloaded
-    "AAPL", "MSFT", "GOOG", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "BRK-B", "JPM",
-    "JNJ", "UNH", "V", "PG", "MA", "HD", "DIS", "BAC", "PFE", "KO"
+# === Screener ===
+st.header("🧠 Stock Screener: Find Top ML-Performing Stocks")
+st.markdown("Scan top stocks to find where the ML strategy outperforms Buy & Hold.")
+
+preloaded_tickers = [
+    'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK-B', 'JPM',
+    'JNJ', 'UNH', 'V', 'PG', 'MA', 'HD', 'DIS', 'BAC', 'PFE', 'KO',
+    'PEP', 'MRK', 'ABBV', 'XOM', 'WMT', 'CVX', 'AVGO', 'NFLX', 'ADBE', 'T',
+    'INTC', 'CSCO', 'CRM', 'VZ', 'CMCSA', 'ACN', 'ABT', 'NKE', 'MCD', 'TMO',
+    'COST', 'QCOM', 'TXN', 'NEE', 'AMD', 'LOW', 'AMGN', 'DHR', 'MDT', 'LMT'
 ]
 
-if st.button("Run Screener"):
-    results = []
-    with st.spinner("Scanning..."):
-        for t in tickers:
-            try:
-                data = get_data(t, start_date, end_date, interval)
-                if data.empty:
-                    continue
-                X = data[features]
-                y = data["Target"]
-                split = int(len(X) * 0.8)
-                X_train, X_test = X[:split], X[split:]
-                y_train, y_test = y[:split], y[split:]
+screener_start = date.today() - timedelta(days=180)
+screener_end = date.today()
+sharpe_threshold = 0.2
 
-                model = RandomForestClassifier(n_estimators=100, random_state=42)
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-
-                data = data.loc[X_test.index].copy()
-                data["Predicted"] = y_pred
-                data["Trade"] = data["Predicted"].shift(1).fillna(0)
-                data["Strategy"] = data["Trade"] * data["Return"] - 0.001 * data["Trade"].diff().abs().fillna(0)
-
-                ml = compute_metrics(data["Strategy"].dropna())
-                bh = compute_metrics(data["Return"].dropna())
-
-                if ml["Sharpe Ratio"] > bh["Sharpe Ratio"] and ml["Annualized Return"] > bh["Annualized Return"]:
-                    results.append({
-                        "Ticker": t,
-                        "ML Sharpe": ml["Sharpe Ratio"],
-                        "BH Sharpe": bh["Sharpe Ratio"],
-                        "Sharpe Diff": ml["Sharpe Ratio"] - bh["Sharpe Ratio"],
-                        "ML Return": ml["Annualized Return"],
-                        "BH Return": bh["Annualized Return"]
-                    })
-            except:
-                continue
-
-    if results:
-        df_results = pd.DataFrame(results).sort_values(by="Sharpe Diff", ascending=False).reset_index(drop=True)
-        st.success(f"Found {len(df_results)} outperforming stocks.")
-        st.dataframe(df_results.style.format({
-            "ML Sharpe": "{:.2f}",
-            "BH Sharpe": "{:.2f}",
-            "Sharpe Diff": "{:.2f}",
-            "ML Return": "{:.2%}",
-            "BH Return": "{:.2%}"
-        }))
-    else:
-        st.warning("No outperforming stocks found.")
+if st.button("🚀 Run Screener on Top 50 Stocks"):
+    with st.spinner("Running strategy..."):
+        results = screen_stocks(preloaded_tickers, screener_start, screener_end, sharpe_threshold)
+        if not results:
+            st.warning("No outperforming stocks found.")
+        else:
+            df_results = format_results(results)
+            st.success(f"Found {len(df_results)} outperforming stocks.")
+            st.dataframe(df_results.style.format({
+                "ML Sharpe": "{:.2f}",
+                "BH Sharpe": "{:.2f}",
+                "Sharpe Diff": "{:.2f}",
+                "ML Return": "{:.2%}",
+                "BH Return": "{:.2%}",
+            }))
