@@ -17,8 +17,8 @@ def screen_stocks(stock_list, period, interval, verbose=False):
                     st.write(f"  ❌ No data for {ticker}")
                 continue
 
-            ml_perf = run_ml_strategy(data)
-            bh_perf = run_buy_and_hold(data)
+            ml_perf, ml_df = run_ml_strategy(data, return_full_df=True)
+            bh_perf = run_buy_and_hold(data, test_index=ml_df.index)
 
             sharpe_diff = ml_perf["sharpe"] - bh_perf["sharpe"]
             annualized_diff = ml_perf["annualized"] - bh_perf["annualized"]

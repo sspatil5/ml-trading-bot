@@ -6,7 +6,8 @@ from sklearn.model_selection import train_test_split
 
 def compute_metrics(returns):
     cumulative = (1 + returns).prod() - 1
-    ann_return = (1 + cumulative) ** (252 / len(returns)) - 1
+    trading_days = returns.count()
+    ann_return = (1 + cumulative) ** (252 / trading_days) - 1 if trading_days > 0 else 0
     ann_vol = returns.std() * (252 ** 0.5)
     sharpe = ann_return / ann_vol if ann_vol != 0 else 0
     drawdown = (1 + returns).cumprod()
@@ -23,6 +24,8 @@ def run_buy_and_hold(df):
     df = df.copy()
     df['Return'] = df['Close'].pct_change()
     df.dropna(inplace=True)
+    if test_index is not None:
+        df = df.loc[test_index]
     return compute_metrics(df['Return'])
 
 def run_ml_strategy(df, return_full_df=False):
@@ -57,7 +60,9 @@ def run_ml_strategy(df, return_full_df=False):
     y = df['Target']
 
     # Split without shuffling to preserve time order
-    X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
+    split_index = int(len(X) * 0.8)
+    X_train, X_test = X[:split_index], X[split_index:]
+    y_train, y_test = y[:split_index], y[split_index:]
 
     # Train model
     model = RandomForestClassifier(n_estimators=100, random_state=42)
