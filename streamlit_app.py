@@ -177,9 +177,6 @@ def run_daily_strategy():
                 "BH Return": "{:.2%}",
             }))
 
-def run_daily_strategy(): 
-    pass
-
 if mode == "📅 Daily ML Bot":
     run_daily_strategy()
 
