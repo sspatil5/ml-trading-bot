@@ -35,58 +35,53 @@ end_date = today
 
 st.markdown(f"📅 Date Range: **{start_date.date()} → {end_date.date()}**")
 
-@st.cache_data
-def get_stock_data(ticker, period, interval):
-    df = yf.download(ticker, period=period, interval=interval, auto_adjust=False)
-
-    # Flatten column names if needed
+# === Fetch and prepare stock data ===
+@st.cache_data(ttl=3600)
+def get_stock_data(ticker, start_date, end_date, interval):
+    df = yf.download(ticker, start=start_date, end=end_date, interval=interval, auto_adjust=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
-
-    # Ensure Close column exists and is clean
     df = df.dropna(subset=["Close"])
-    
-    # Use explicit column reference to avoid ambiguity
-    df['SMA_10'] = df.ta.sma(close=df['Close'], length=10)
-    df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
+
+    df['SMA_10'] = df.ta.sma(close=df['Close'], length=10).shift(1)
+    df['RSI'] = df.ta.rsi(close=df['Close'], length=14).shift(1)
     macd = df.ta.macd(close=df['Close'])
-    df['MACD'] = macd['MACD_12_26_9']
-    
+    df['MACD'] = macd['MACD_12_26_9'].shift(1)
+
     df['Return'] = df['Close'].pct_change()
     df['Lag1'] = df['Return'].shift(1)
     df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
+    return df.dropna()
 
-    return df
+df = get_stock_data(ticker, start_date, end_date, interval)
 
-df = get_stock_data(ticker, period, interval)
-
-# === Train model ===
+# === Model Training ===
 features = ['SMA_10', 'RSI', 'MACD', 'Lag1']
 X = df[features]
 y = df['Target']
-X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
+split_index = int(len(X) * 0.8)
+X_train, X_test = X[:split_index], X[split_index:]
+y_train, y_test = y[:split_index], y[split_index:]
 
 model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
-
 y_pred = model.predict(X_test)
-df = df.loc[X_test.index]
+
+df = df.loc[X_test.index].copy()
 df['Predicted'] = y_pred
 df['Trade'] = df['Predicted'].shift(1).fillna(0)
 df['Strategy'] = df['Trade'] * df['Return'] - 0.001 * df['Trade'].diff().abs().fillna(0)
 
-# === Performance chart ===
+# === Performance Chart ===
 cumulative_returns = (df[['Return', 'Strategy']] + 1).cumprod()
-
 st.subheader("📊 Strategy Performance vs Buy & Hold")
 st.line_chart(cumulative_returns)
 
-# === Metrics ===
+# === Classification Metrics ===
 st.subheader("📋 Model Classification Metrics")
-report = classification_report(y_test, y_pred, output_dict=True)
-st.json(report)
+st.json(classification_report(y_test, y_pred, output_dict=True))
 
-# === Strategy performance metrics ===
+# === Performance Metrics ===
 def compute_metrics(returns):
     cumulative = (1 + returns).prod() - 1
     annualized = (1 + cumulative) ** (252 / len(returns)) - 1
@@ -119,21 +114,15 @@ with st.expander("🔎 Full Metrics Comparison"):
     for k, v in buy_hold_metrics.items():
         st.write(f"{k}: {v:.2%}" if 'Return' in k or 'Drawdown' in k else f"{k}: {v:.2f}")
 
-
-# === Most Recent Prediction ===
+# === Latest Prediction ===
 latest_prediction = "UP 📈" if y_pred[-1] == 1 else "DOWN 📉"
 st.subheader("🔮 Latest Prediction")
 st.markdown(f"Tomorrow's prediction for **{ticker}**: **{latest_prediction}**")
 
 # === Screener Section ===
 st.header("🧠 Stock Screener: Find Top ML-Performing Stocks")
-
-from datetime import date, timedelta
-from stock_screener import screen_stocks
-
 st.markdown("Scan a set of top stocks to find where the ML strategy outperforms Buy & Hold.")
 
-# Preloaded top ~50 US tickers
 preloaded_tickers = [
     'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK-B', 'JPM',
     'JNJ', 'UNH', 'V', 'PG', 'MA', 'HD', 'DIS', 'BAC', 'PFE', 'KO',
@@ -144,13 +133,12 @@ preloaded_tickers = [
 
 if st.button("🚀 Run Screener on Top 50 Stocks"):
     with st.spinner("Running strategy..."):
-        results = screen_stocks(preloaded_tickers, period=period, interval=interval, verbose=True)
+        results = screen_stocks(preloaded_tickers, start_date=start_date, end_date=end_date, interval=interval, verbose=True)
 
         if not results:
             st.warning("No outperforming stocks found.")
         else:
             df_results = format_results(results)
-
             st.success(f"Found {len(df_results)} outperforming stocks.")
             st.dataframe(df_results.style.format({
                 "ML Sharpe": "{:.2f}",

@@ -35,50 +35,38 @@ def run_ml_strategy(df, return_full_df=False):
 
     df.dropna(subset=["Close"], inplace=True)
 
-    # Feature engineering
-    df['SMA_10'] = df.ta.sma(close=df['Close'], length=10)
-    df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
-    macd = df.ta.macd(close=df['Close'])
-    df['MACD'] = macd['MACD_12_26_9']
-    df['Lag1'] = df['Close'].shift(1)
+    # Compute indicators
+    df['SMA_10'] = ta.sma(df['Close'], length=10).shift(1)
+    df['RSI'] = ta.rsi(df['Close'], length=14).shift(1)
+    macd = ta.macd(df['Close'])
+    df['MACD'] = macd['MACD_12_26_9'].shift(1)
+    df['Lag1'] = df['Close'].shift(2)  # Lag1 of Close, shifted an extra step to match features at t-1
     df['Return'] = df['Close'].pct_change()
 
-    # Shift features forward by 1 so they only use info available at time t
-    df['SMA_10'] = df['SMA_10'].shift(1)
-    df['RSI'] = df['RSI'].shift(1)
-    df['MACD'] = df['MACD'].shift(1)
-    df['Lag1'] = df['Lag1'].shift(1)
-
-    # Define target: whether next-day return is positive
+    # Define target
     df['Target'] = (df['Return'].shift(-1) > 0).astype(int)
 
     df.dropna(inplace=True)
 
-    # Feature and target selection
     features = ['SMA_10', 'RSI', 'MACD', 'Lag1']
     X = df[features]
     y = df['Target']
 
-    # Split without shuffling to preserve time order
     split_index = int(len(X) * 0.8)
     X_train, X_test = X[:split_index], X[split_index:]
     y_train, y_test = y[:split_index], y[split_index:]
 
-    # Train model
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
-    # Predict
     proba = model.predict_proba(X_test)[:, 1]
     y_pred = (proba > 0.55).astype(int)
 
-    # Apply trading logic
-    df = df.loc[X_test.index].copy()
-    df['Predicted'] = y_pred
-    df['Trade'] = df['Predicted'].shift(1).fillna(0)  # Use signal from previous day
-    cost = 0.001
-    df['Strategy'] = df['Trade'] * df['Return'] - cost * df['Trade'].diff().abs().fillna(0)
+    df_test = df.loc[X_test.index].copy()
+    df_test['Predicted'] = y_pred
+    df_test['Trade'] = df_test['Predicted'].shift(1).fillna(0)
+    df_test['Strategy'] = df_test['Trade'] * df_test['Return'] - 0.001 * df_test['Trade'].diff().abs().fillna(0)
 
-    metrics = compute_metrics(df['Strategy'].dropna())
+    metrics = compute_metrics(df_test['Strategy'].dropna())
 
-    return (metrics, df) if return_full_df else metrics
+    return (metrics, df_test) if return_full_df else metrics
