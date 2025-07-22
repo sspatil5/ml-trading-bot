@@ -107,3 +107,44 @@ with st.expander("🔎 Full Metrics Comparison"):
 latest_prediction = "UP 📈" if y_pred[-1] == 1 else "DOWN 📉"
 st.subheader("🔮 Latest Prediction")
 st.markdown(f"Tomorrow's prediction for **{ticker}**: **{latest_prediction}**")
+
+# === Screener Section ===
+st.header("🧠 Stock Screener: Find Top ML-Performing Stocks")
+st.markdown("Run the ML strategy across 50 major tickers and compare vs Buy & Hold.")
+
+top_50_tickers = [
+    'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK-B', 'JPM',
+    'JNJ', 'UNH', 'V', 'PG', 'MA', 'HD', 'DIS', 'BAC', 'PFE', 'KO',
+    'PEP', 'MRK', 'ABBV', 'XOM', 'WMT', 'CVX', 'AVGO', 'NFLX', 'ADBE', 'T',
+    'INTC', 'CSCO', 'CRM', 'VZ', 'CMCSA', 'ACN', 'ABT', 'NKE', 'MCD', 'TMO',
+    'COST', 'QCOM', 'TXN', 'NEE', 'AMD', 'LOW', 'AMGN', 'DHR', 'MDT', 'LMT'
+]
+
+if st.button("🚀 Run Screener on Top 50 Stocks"):
+    outperforming = []
+    with st.spinner("Running strategy on top 50 stocks..."):
+        for symbol in top_50_tickers:
+            try:
+                df_temp = get_stock_data(symbol, period, interval)
+
+                X = df_temp[features]
+                y = df_temp['Target']
+                X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
+
+                model = RandomForestClassifier(n_estimators=100, random_state=42)
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+
+                df_temp = df_temp.loc[X_test.index]
+                df_temp['Predicted'] = y_pred
+                df_temp['Trade'] = df_temp['Predicted'].shift(1).fillna(0)
+                df_temp['Strategy'] = df_temp['Trade'] * df_temp['Return'] - 0.001 * df_temp['Trade'].diff().abs().fillna(0)
+
+                ml_metrics = compute_metrics(df_temp['Strategy'].dropna())
+                bh_metrics = compute_metrics(df_temp['Return'].dropna())
+
+                if ml_metrics['Sharpe Ratio'] > bh_metrics['Sharpe Ratio'] and ml_metrics['Annualized Return'] > bh_metrics['Annualized Return']:
+                    outperforming.append({
+                        "Ticker": symbol,
+                        "ML Sharpe": ml_metrics['Sharpe Ratio'],
+                        "B
