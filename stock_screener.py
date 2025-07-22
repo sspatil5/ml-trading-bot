@@ -3,7 +3,7 @@ from strategy import run_ml_strategy, run_buy_and_hold
 import pandas as pd
 import streamlit as st
 
-def screen_stocks(stock_list, period, interval, verbose=False):
+def screen_stocks(stock_list, period=None, interval="1d", start_date=None, end_date=None, verbose=False):
     results = []
 
     for ticker in stock_list:
@@ -11,12 +11,18 @@ def screen_stocks(stock_list, period, interval, verbose=False):
             if verbose:
                 st.write(f"▶️ Processing {ticker}")
 
-            data = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
+            # Choose between period-based or date-range-based download
+            if start_date and end_date:
+                data = yf.download(ticker, start=start_date, end=end_date, interval=interval, progress=False, auto_adjust=False)
+            else:
+                data = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
+
             if data.empty:
                 if verbose:
                     st.write(f"  ❌ No data for {ticker}")
                 continue
 
+            # Run ML strategy and Buy & Hold on same index
             ml_perf, ml_df = run_ml_strategy(data, return_full_df=True)
             bh_perf = run_buy_and_hold(data, test_index=ml_df.index)
 
@@ -32,6 +38,7 @@ def screen_stocks(stock_list, period, interval, verbose=False):
                 st.write(f"  • BH Annualized Return: {bh_perf['annualized']:.2%}")
                 st.write(f"  • Return Diff: {annualized_diff:.2%}")
 
+            # Append only if ML outperforms BH
             if ml_perf["sharpe"] > bh_perf["sharpe"] and ml_perf["annualized"] > bh_perf["annualized"]:
                 results.append((ticker, ml_perf, bh_perf))
                 if verbose:
@@ -46,6 +53,7 @@ def screen_stocks(stock_list, period, interval, verbose=False):
             continue
 
     return results
+
 
 def format_results(results):
     formatted = pd.DataFrame([
