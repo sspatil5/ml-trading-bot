@@ -45,7 +45,7 @@ proba = model.predict_proba(X_test)[:, 1]
 y_pred = (proba > 0.55).astype(int) # Attempts to predict test data with confidence threshold
 print(classification_report(y_test, y_pred)) # Prints metrics like Accuracy, Precision, Recall
 
-df = df.iloc[X_test.index] # Keeps only data in the test set (Strategy Simulation)
+df = df.loc[X_test.index] # Keeps only data in the test set (Strategy Simulation)
 df['Predicted'] = y_pred
 df['Strategy'] = df['Predicted'].shift(1) * df['Return']
 # If model predicted 1 yesterday, buy today
