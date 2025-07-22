@@ -147,4 +147,24 @@ if st.button("🚀 Run Screener on Top 50 Stocks"):
                     outperforming.append({
                         "Ticker": symbol,
                         "ML Sharpe": ml_metrics['Sharpe Ratio'],
-                        "B
+                        "BH Sharpe": bh_metrics['Sharpe Ratio'],
+                        "Sharpe Diff": ml_metrics['Sharpe Ratio'] - bh_metrics['Sharpe Ratio'],
+                        "ML Return": ml_metrics['Annualized Return'],
+                        "BH Return": bh_metrics['Annualized Return']
+                    })
+            except Exception as e:
+                st.write(f"❌ {symbol} failed: {e}")
+                continue
+
+    if not outperforming:
+        st.warning("No outperforming stocks found.")
+    else:
+        df_screen = pd.DataFrame(outperforming).sort_values(by="Sharpe Diff", ascending=False)
+        st.success(f"Found {len(df_screen)} outperforming stocks!")
+        st.dataframe(df_screen.style.format({
+            "ML Sharpe": "{:.2f}",
+            "BH Sharpe": "{:.2f}",
+            "Sharpe Diff": "{:.2f}",
+            "ML Return": "{:.2%}",
+            "BH Return": "{:.2%}"
+        }))
