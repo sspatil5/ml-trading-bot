@@ -2,7 +2,7 @@ import yfinance as yf
 from strategy import run_ml_strategy, run_buy_and_hold
 import pandas as pd
 
-def screen_stocks(stock_list, start_date, end_date, threshold=0.2, verbose=False):
+def screen_stocks(stock_list, start_date, end_date, verbose=False):
     results = []
 
     for ticker in stock_list:
@@ -17,7 +17,7 @@ def screen_stocks(stock_list, start_date, end_date, threshold=0.2, verbose=False
             ml_perf = run_ml_strategy(df)
             bh_perf = run_buy_and_hold(df)
 
-            if ml_perf["sharpe"] > bh_perf["sharpe"] + threshold:
+            if ml_perf["sharpe"] > bh_perf["sharpe"]:
                 results.append((ticker, ml_perf, bh_perf))
 
         except Exception as e:

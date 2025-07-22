@@ -133,7 +133,7 @@ sharpe_threshold = 0.2
 
 if st.button("🚀 Run Screener on Top 50 Stocks"):
     with st.spinner("Running strategy..."):
-        results = screen_stocks(preloaded_tickers, screener_start, screener_end, sharpe_threshold)
+        results = screen_stocks(preloaded_tickers, screener_start, screener_end)
 
         if not results:
             st.warning("No outperforming stocks found.")
