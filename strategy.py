@@ -8,15 +8,19 @@ from sklearn.metrics import classification_report
 
 def get_stock_data(ticker='AAPL', period='1y', interval='1d'):
     df = yf.download(ticker, period=period, interval=interval)
-    df.dropna(inplace=True)
+
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df = df.dropna(subset=["Close"])
     return df
 
 df = get_stock_data('AAPL')
 print(df.tail())
 
-df['SMA_10'] = df.ta.sma(length=10) #Adds 10-day simple moving average of closing price
-df['RSI'] = df.ta.rsi(length=14) #Relative Strength Index, measures momentum, detecting overbought/oversold conditions
-macd = df.ta.macd()
+df['SMA_10'] = df.ta.sma(close=df['Close'], length=10) #Adds 10-day simple moving average of closing price
+df['RSI'] = df.ta.rsi(close=df['Close'], length=14) #Relative Strength Index, measures momentum, detecting overbought/oversold conditions
+macd = df.ta.macd(close=df['Close'])
 df['MACD'] = macd['MACD_12_26_9'] # Another momentum-based signal
 df['Lag1'] = df['Close'].shift(1) # Basic time dependency: Adds yesterday's closing price as lagged feature
 df['Return'] = df['Close'].pct_change() # Adds daily return in percent change
