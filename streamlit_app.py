@@ -7,6 +7,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import streamlit as st
 from alpaca import run_intraday_trader
+from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
+import numpy as np
 
 st.set_page_config(page_title="ML Trading Bot", layout="wide")
 
@@ -72,8 +75,78 @@ def run_daily_strategy():
     y = df['Target']
     X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
 
-    model = base_model
-    model.fit(X_train, y_train)
+    # Drop any rows with NaNs in training and testing data
+    X_train = X_train.dropna()
+    y_train = y_train.loc[X_train.index]
+
+    X_test = X_test.dropna()
+    y_test = y_test.loc[X_test.index]
+
+    models = {
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
+        "XGBoost": XGBClassifier(use_label_encoder=False, eval_metric='logloss'),
+        "Logistic Regression": LogisticRegression(max_iter=1000)
+    }
+    model_results = []
+
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        df_temp = df.loc[X_test.index].copy()
+        df_temp['Predicted'] = y_pred
+        df_temp['Trade'] = df_temp['Predicted'].shift(1).fillna(0)
+        df_temp['Strategy'] = df_temp['Trade'] * df_temp['Return'] - 0.001 * df_temp['Trade'].diff().abs().fillna(0)
+
+        strat_metrics = compute_metrics(df_temp['Strategy'].dropna())
+
+        report_dict = classification_report(y_test, y_pred, output_dict=True)
+        report_df = pd.DataFrame(report_dict).transpose().dropna()
+        report_df[["precision", "recall", "f1-score"]] = report_df[["precision", "recall", "f1-score"]].round(2)
+        report_df["support"] = report_df["support"].astype(int)
+
+        model_results.append({
+            "Model": name,
+            "Sharpe Ratio": strat_metrics["Sharpe Ratio"],
+            "Annualized Return": strat_metrics["Annualized Return"],
+            "Max Drawdown": strat_metrics["Max Drawdown"],
+            "Classification Report": report_dict,
+            "Report DF": report_df
+        })
+
+    # === Model Comparison Table ===
+    st.header("🤖 Model Comparison Results")
+
+    comparison_data = {
+        "Model": [],
+        "Accuracy": [],
+        "F1 (Class 0)": [],
+        "F1 (Class 1)": [],
+        "Macro F1": [],
+        "Weighted F1": []
+    }
+
+    for result in model_results:
+        comparison_data["Model"].append(result["Model"])
+        report = result["Classification Report"]
+        comparison_data["Accuracy"].append(report.get("accuracy", 0))
+        comparison_data["F1 (Class 0)"].append(report.get("0", {}).get("f1-score", 0))
+        comparison_data["F1 (Class 1)"].append(report.get("1", {}).get("f1-score", 0))
+        comparison_data["Macro F1"].append(report.get("macro avg", {}).get("f1-score", 0))
+        comparison_data["Weighted F1"].append(report.get("weighted avg", {}).get("f1-score", 0))
+
+    df_comparison = pd.DataFrame(comparison_data)
+    st.dataframe(df_comparison.style.format({
+        "Accuracy": "{:.2%}",
+        "F1 (Class 0)": "{:.2f}",
+        "F1 (Class 1)": "{:.2f}",
+        "Macro F1": "{:.2f}",
+        "Weighted F1": "{:.2f}"
+    }))
+
+    # Identify best model by Macro F1 score
+    best_model = df_comparison.loc[df_comparison["Macro F1"].idxmax()]["Model"]
+    st.markdown(f"✅ **Best performing model for {ticker}: `{best_model}` based on Macro F1 score.**")
 
     y_pred = model.predict(X_test)
     df = df.loc[X_test.index]
@@ -178,9 +251,25 @@ def run_daily_strategy():
                 "ML Return": "{:.2%}",
                 "BH Return": "{:.2%}",
             }))
+    return model_results
 
 if mode == "📅 Daily ML Bot":
-    run_daily_strategy()
+    model_results = run_daily_strategy()
+
+    st.header("🤖 Model Comparison Results")
+
+    for result in model_results:
+        st.subheader(f"📌 {result['Model']}")
+        st.metric("Sharpe Ratio", f"{result['Sharpe Ratio']:.2f}")
+        st.metric("Annualized Return", f"{result['Annualized Return']:.2%}")
+        st.metric("Max Drawdown", f"{result['Max Drawdown']:.2%}")
+        with st.expander("📋 Classification Report"):
+            st.dataframe(result["Report DF"].style.format({
+                "precision": "{:.2f}",
+                "recall": "{:.2f}",
+                "f1-score": "{:.2f}",
+                "support": "{:d}"
+            }))
 
 elif mode == "⚡ Intraday Trader (Alpaca)":
     run_intraday_trader()
