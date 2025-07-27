@@ -165,8 +165,8 @@ def run_daily_strategy():
     #report = classification_report(y_test, y_pred, output_dict=True)
     #st.json(report)
 
-    #strategy_metrics = compute_metrics(df['Strategy'].dropna())
-    #buy_hold_metrics = compute_metrics(df['Return'].dropna())
+    strategy_metrics = compute_metrics(df['Strategy'].dropna())
+    buy_hold_metrics = compute_metrics(df['Return'].dropna())
 
     st.subheader("📈 Performance Metrics")
     col1, col2, col3 = st.columns(3)
