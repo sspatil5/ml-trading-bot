@@ -7,3 +7,4 @@ streamlit
 setuptools
 numpy<2.0
 requests
+xgboost
